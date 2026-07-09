@@ -1,5 +1,0 @@
-config.yaml
-__pycache__/
-*.pyc
-.env
-latest_notices.json
