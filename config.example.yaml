@@ -1,0 +1,66 @@
+# 이 파일을 config.yaml로 복사해서 로컬에서 사용하세요.
+# GitHub에는 config.yaml과 .env를 올리지 마세요.
+
+kstartup:
+  # 공공데이터포털 > 창업진흥원_K-Startup(사업소개,사업공고,콘텐츠 등)_조회서비스
+  # > 활용신청 후 Swagger/활용가이드에서 '지원 사업 공고 정보' 요청 URL을 확인해 넣으세요.
+  # 예: https://.../announcementInformation 또는 https://apis.data.go.kr/.../...
+  api_url: ""
+
+  # 로컬에서는 .env의 KSTARTUP_SERVICE_KEY 사용 권장
+  # GitHub Actions에서는 Repository secrets의 KSTARTUP_SERVICE_KEY 사용 권장
+  service_key: ""
+
+  # API 응답 형식. 보통 json 사용을 권장합니다.
+  response_format: "json"
+
+  # API에 함께 보낼 기본 파라미터입니다.
+  # 실제 파라미터명은 공공데이터포털 Swagger/활용가이드에 맞춰 조정하세요.
+  params:
+    pageNo: 1
+    numOfRows: 50
+    resultType: "json"
+    dataType: "json"
+
+  # 모집중 공고만 조회하기 위한 파라미터 후보입니다.
+  # 실제 API가 사용하는 이름 하나만 남기면 됩니다.
+  ongoing_param_candidates:
+    - name: "recrtPrgsYn"
+      value: "Y"
+    - name: " 모집 진행 여부"
+      value: "Y"
+
+  # 사업공고 > 모집중 > 중앙부처ㆍ지자체ㆍ공공기관만 남기기 위한 키워드입니다.
+  # API 응답의 분류명/기관명/원문 텍스트 중 하나라도 아래 키워드를 포함하면 통과합니다.
+  include_keywords:
+    - "중앙부처"
+    - "지자체"
+    - "공공기관"
+
+  # 제목/링크 등 API 필드명이 문서와 다를 수 있어서 후보명을 여러 개 둡니다.
+  field_candidates:
+    id: ["pbancSn", "announcementId", "id", "seq", "bizPbancNo", "pbancId"]
+    title: ["pbancNm", "bizPbancNm", "사업공고명", "title", "ttl", "pbancTitle"]
+    category: ["suptBizClsfc", "지원사업분류", "category", "bizCategory", "pbancClssNm"]
+    organization: ["sprvInstNm", "organization", "기관명", "jurisdiction", "deptNm"]
+    start_date: ["pbancRcptBgngDt", "startDate", "공고접수시작일시", "recrtStartDate"]
+    end_date: ["pbancRcptEndDt", "endDate", "공고접수종료일시", "recrtEndDate", "deadline"]
+    status: ["recrtPrgsYn", "모집 진행 여부", "status", "pbancPrgsSttsNm"]
+    url: ["pbancUrl", "url", "link", "detailUrl", "dtlUrl"]
+
+  # 상세 URL 필드가 없을 때 사용할 기본 상세 URL 템플릿입니다.
+  # {id} 자리에 공고 ID가 들어갑니다. 실제 상세 URL 구조가 다르면 수정하세요.
+  detail_url_template: "https://www.k-startup.go.kr/web/contents/bizpbanc-ongoing.do?schM=view&pbancSn={id}"
+
+notification:
+  method: "slack"
+  slack:
+    # 로컬에서는 .env의 SLACK_WEBHOOK_URL 사용 권장
+    # GitHub Actions에서는 Repository secrets의 SLACK_WEBHOOK_URL 사용 권장
+    webhook_url: ""
+    username: "K-Startup 공고봇"
+    icon_emoji: ":mega:"
+
+state:
+  seen_file: "seen_notice_ids.json"
+  latest_file: "latest_notices.json"
