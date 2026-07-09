@@ -18,9 +18,10 @@ import requests
 import yaml
 from bs4 import BeautifulSoup
 
-load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
+
 CONFIG_PATH = BASE_DIR / "config.yaml"
 EXAMPLE_CONFIG_PATH = BASE_DIR / "config.example.yaml"
 SEEN_PATH = BASE_DIR / "seen_urls.json"
@@ -280,10 +281,16 @@ def run() -> None:
 
     # 이미 보낸 URL은 제외합니다. 첫 실행 때는 전체가 발송될 수 있습니다.
     seen_urls = load_seen_urls()
+    for notice in unique_notices:
+        if notice.url in seen_urls:
+            notice.status = f"기존 / {notice.status}"
+        else:
+            notice.status = f"신규 / {notice.status}"
+    
     new_notices = [n for n in unique_notices if n.url not in seen_urls]
 
-    subject = f"정부지원사업 접수중 공고 {len(new_notices)}건"
-    body = build_message(new_notices)
+    subject = f"정부지원사업 공고 신규 {len(new_notices)}건 / 전체 {len(unique_notices)}건"
+    body = build_message(unique_notices)
 
     print(body)
 
