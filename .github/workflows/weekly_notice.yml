@@ -2,7 +2,7 @@ name: Weekly Business Notice Monitor
 
 on:
   schedule:
-    - cron: "0 2 * * 1"  # 매주 월요일 11:00 KST
+    - cron: "*/30 * * * *"  # 테스트용: 매일 30분마다 실행
   workflow_dispatch:
 
 permissions:
@@ -33,7 +33,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add seen_urls.json latest_notices.json
+          git add seen_urls.json
           git commit -m "Update seen notice history" || echo "No changes to commit"
           git push
 
