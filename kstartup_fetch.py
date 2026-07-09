@@ -93,6 +93,30 @@ def _normalize_date(value: str) -> str:
         return f"{value[:4]}-{value[4:6]}-{value[6:8]}"
     return value
 
+def _normalize_url(value: str) -> str:
+    value = (value or "").strip()
+
+    if not value:
+        return ""
+
+    # API 문서 예시 중 web/contents가 중복되는 경우 보정
+    value = value.replace("/web/contents/web/contents/", "/web/contents/")
+
+    # www.k-startup.go.kr 로 시작하면 https:// 붙이기
+    if value.startswith("www."):
+        value = "https://" + value
+
+    # 혹시 javascript:go_view(178453); 형태가 들어오면 상세 URL로 변환
+    match = re.search(r"go_view\((\d+)\)", value)
+    if match:
+        pbanc_sn = match.group(1)
+        return (
+            "https://www.k-startup.go.kr/web/contents/"
+            f"bizpbanc-ongoing.do?schM=view&pbancSn={pbanc_sn}"
+        )
+
+    return value
+
 
 def _contains_any_keyword(text: str, keywords: list[str]) -> bool:
     if not keywords:
@@ -136,11 +160,10 @@ def fetch_kstartup_notices(config: dict[str, Any]) -> list[Notice]:
             items = _parse_xml_items(text)
         else:
             raise RuntimeError(
-                        "API 응답이 JSON이 아닙니다. config.yaml의 resultType/dataType이 json인지, "
-                  "또는 API URL/인증키가 맞는지 확인하세요. 응답 앞부분: " + text[:300]
-        ) 
-
-    items = _dig_items(data)
+                "API 응답이 JSON/XML 형식이 아닙니다. "
+                "API URL/인증키/파라미터를 확인하세요. 응답 앞부분: " + text[:300]
+            )
+   
     field_candidates = kcfg.get("field_candidates", {})
     include_keywords = kcfg.get("include_keywords", [])
     detail_template = kcfg.get("detail_url_template", "")
@@ -153,8 +176,9 @@ def fetch_kstartup_notices(config: dict[str, Any]) -> list[Notice]:
         organization = _first_value(item, field_candidates.get("organization", []))
         start_date = _normalize_date(_first_value(item, field_candidates.get("start_date", [])))
         end_date = _normalize_date(_first_value(item, field_candidates.get("end_date", [])))
-        status = _first_value(item, field_candidates.get("status", []))
+        status = _normalize_status(_first_value(item, field_candidates.get("status", [])))
         url = _first_value(item, field_candidates.get("url", [])) or _make_detail_url(detail_template, notice_id)
+        url = _normalize_url(url)
 
         combined_text = " ".join(str(v) for v in item.values() if v is not None)
         if not _contains_any_keyword(combined_text, include_keywords):
@@ -217,3 +241,12 @@ def _parse_xml_items(xml_text: str) -> list[dict[str, Any]]:
             items.append(item)
 
     return items
+
+def _normalize_status(value: str) -> str:
+    value = (value or "").strip().upper()
+
+    if value == "Y":
+        return "모집중"
+    if value == "N":
+        return "마감"
+    return value
