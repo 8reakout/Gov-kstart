@@ -8,7 +8,7 @@ kstartup:
 
   params:
     page: 1
-    perPage: 50
+    perPage: 100
     returnType: "json"
     Rcrt_prgs_yn: "Y"
 
