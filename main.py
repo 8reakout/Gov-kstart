@@ -17,6 +17,10 @@ load_dotenv(BASE_DIR / ".env")
 CONFIG_PATH = BASE_DIR / "config.yaml"
 EXAMPLE_CONFIG_PATH = BASE_DIR / "config.example.yaml"
 
+# 신규 공고를 Slack 메시지 하나에 몇 건씩 담을지 설정합니다.
+# 50건씩 나누면 Slack 메시지가 너무 길어져 잘리는 문제를 줄일 수 있습니다.
+SLACK_CHUNK_SIZE = 50
+
 
 def load_config() -> dict[str, Any]:
     """config.yaml이 있으면 config.yaml을 사용하고, 없으면 config.example.yaml을 사용합니다."""
