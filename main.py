@@ -113,6 +113,12 @@ def build_message(
 
     return title, "\n".join(lines), new_notices, old_notices
 
+def chunk_list(items: list[Notice], chunk_size: int) -> list[list[Notice]]:
+    return [
+        items[i : i + chunk_size]
+        for i in range(0, len(items), chunk_size)
+    ]
+
 
 def run() -> None:
     config = load_config()
