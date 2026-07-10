@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import date, datetime
 
 import json
 import os
@@ -179,6 +180,8 @@ def fetch_kstartup_notices(config: dict[str, Any]) -> list[Notice]:
         status = _normalize_status(_first_value(item, field_candidates.get("status", [])))
         url = _first_value(item, field_candidates.get("url", [])) or _make_detail_url(detail_template, notice_id)
         url = _normalize_url(url)
+        if not _is_active_notice(status, end_date):
+            continue
 
         combined_text = " ".join(str(v) for v in item.values() if v is not None)
         if not _contains_any_keyword(combined_text, include_keywords):
@@ -250,3 +253,24 @@ def _normalize_status(value: str) -> str:
     if value == "N":
         return "마감"
     return value
+
+
+def _parse_date(value: str) -> date | None:
+    value = _normalize_date(value)
+
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _is_active_notice(status: str, end_date: str) -> bool:
+    if status == "마감":
+        return False
+
+    end = _parse_date(end_date)
+
+    if end is None:
+        return True
+
+    return end >= date.today()
