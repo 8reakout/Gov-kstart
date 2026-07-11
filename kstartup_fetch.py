@@ -11,6 +11,14 @@ from typing import Any
 
 import requests
 
+import requests
+
+ALLOWED_CATEGORIES = {
+    "사업화",
+    "인력",
+    "멘토링ㆍ컨설팅ㆍ교육",
+}
+
 @dataclass
 class Notice:
     notice_id: str
@@ -174,6 +182,11 @@ def fetch_kstartup_notices(config: dict[str, Any]) -> list[Notice]:
         notice_id = _first_value(item, field_candidates.get("id", []))
         title = _first_value(item, field_candidates.get("title", []))
         category = _first_value(item, field_candidates.get("category", []))
+
+        # 원하는 분류만 알림 대상으로 사용합니다.
+        if category not in ALLOWED_CATEGORIES:
+            continue
+        
         organization = _first_value(item, field_candidates.get("organization", []))
         start_date = _normalize_date(_first_value(item, field_candidates.get("start_date", [])))
         end_date = _normalize_date(_first_value(item, field_candidates.get("end_date", [])))
