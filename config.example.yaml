@@ -1,7 +1,7 @@
 kstartup:
   api_url: "https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01"
 
-  # 실제 인증키는 GitHub Secrets의 KSTARTUP_SERVICE_KEY 사용
+  # 실제 인증키는 .env 또는 GitHub Secrets의 KSTARTUP_SERVICE_KEY 사용
   service_key: ""
 
   response_format: "json"
@@ -15,13 +15,18 @@ kstartup:
   field_candidates:
     id:
       - "pbanc_sn"
+      - "id"
     title:
       - "biz_pbanc_nm"
+      - "title"
+      - "titl_nm"
     category:
       - "supt_biz_clsfc"
+      - "category"
     organization:
       - "pbanc_ntrp_nm"
       - "sprv_inst"
+      - "organization"
     start_date:
       - "pbanc_rcpt_bgng_dt"
     end_date:
@@ -33,3 +38,8 @@ kstartup:
       - "detl_pg_url"
 
   include_keywords: []
+
+slack:
+  webhook_url: ""
+  username: "K-Startup 공고 알림봇"
+  icon_emoji: ":mega:"
