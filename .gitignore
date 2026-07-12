@@ -1,0 +1,8 @@
+.env
+config.yaml
+latest_notices.json
+__pycache__/
+*.pyc
+.venv/
+kstartup_notice_latest.html
+kstartup_notice_*.html
