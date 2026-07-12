@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 from datetime import datetime
 from pathlib import Path
@@ -8,22 +9,18 @@ from typing import Any
 import yaml
 from dotenv import load_dotenv
 
+from email_notifier import send_html_email
 from kstartup_fetch import Notice, fetch_kstartup_notices
-from notifier import send_slack_message
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
 CONFIG_PATH = BASE_DIR / "config.yaml"
 EXAMPLE_CONFIG_PATH = BASE_DIR / "config.example.yaml"
-
-# 신규 공고를 Slack 메시지 하나에 몇 건씩 담을지 설정합니다.
-# 50건씩 나누면 Slack 메시지가 너무 길어져 잘리는 문제를 줄일 수 있습니다.
-SLACK_CHUNK_SIZE = 50
+HTML_OUTPUT_PATH = BASE_DIR / "kstartup_notice_latest.html"
 
 
 def load_config() -> dict[str, Any]:
-    """config.yaml이 있으면 config.yaml을 사용하고, 없으면 config.example.yaml을 사용합니다."""
     path = CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_CONFIG_PATH
 
     with path.open("r", encoding="utf-8") as f:
@@ -31,7 +28,6 @@ def load_config() -> dict[str, Any]:
 
 
 def load_seen_ids(path: Path) -> set[str]:
-    """이미 알림으로 보낸 공고 ID 목록을 읽습니다."""
     if not path.exists():
         return set()
 
@@ -45,79 +41,136 @@ def load_seen_ids(path: Path) -> set[str]:
 
 
 def save_seen_ids(path: Path, ids: set[str]) -> None:
-    """이번 실행에서 확인한 공고 ID까지 포함해서 저장합니다."""
     path.write_text(
         json.dumps(sorted(ids), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
 
-def format_notice(notice: Notice, index: int) -> list[str]:
-    """Slack 메시지에 표시할 공고 1건을 문자열 목록으로 만듭니다."""
-    period = " ~ ".join(
-        x for x in [notice.start_date, notice.end_date] if x
-    ) or "페이지 확인 필요"
-
-    return [
-        f"{index}. {notice.title}",
-        f"- 분류: {notice.category or '-'}",
-        f"- 기관: {notice.organization or '-'}",
-        f"- 상태: {notice.status or '모집중'}",
-        f"- 접수기간/마감: {period}",
-        f"- 링크: {notice.url or '-'}",
-        "",
-    ]
+def _period_text(notice: Notice) -> str:
+    return " ~ ".join(x for x in [notice.start_date, notice.end_date] if x) or "-"
 
 
-def build_message(
-    notices: list[Notice],
-    seen_ids: set[str],
-) -> tuple[str, str, list[Notice], list[Notice]]:
-    """전체 공고를 신규/기존으로 나누고 Slack 메시지를 생성합니다."""
+def build_text_message(new_notices: list[Notice], old_notices: list[Notice], total_count: int) -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    new_notices = [n for n in notices if n.notice_id not in seen_ids]
-    old_notices = [n for n in notices if n.notice_id in seen_ids]
-
-    title = (
-        f"K-Startup 모집중 공고 "
-        f"신규 {len(new_notices)}건 / 기존 {len(old_notices)}건 / 전체 {len(notices)}건"
-    )
-
     lines = [
         "[K-Startup 모집중 공고 알림]",
         f"조회시각: {now}",
-        f"신규: {len(new_notices)}건 / 기존: {len(old_notices)}건 / 전체: {len(notices)}건",
+        f"신규: {len(new_notices)}건 / 기존: {len(old_notices)}건 / 전체: {total_count}건",
         "",
     ]
 
-    if not notices:
-        lines.append("현재 조건에 맞는 모집중 공고가 없습니다.")
-        return title, "\n".join(lines), new_notices, old_notices
-
-    lines.append("🆕 [신규 공고]")
     if new_notices:
+        lines.append("[신규 공고]")
         for idx, notice in enumerate(new_notices, 1):
-            lines.extend(format_notice(notice, idx))
+            lines.extend(
+                [
+                    f"{idx}. {notice.title}",
+                    f"- 분류: {notice.category or '-'}",
+                    f"- 기관: {notice.organization or '-'}",
+                    f"- 상태: {notice.status or '-'}",
+                    f"- 접수기간: {_period_text(notice)}",
+                    f"- 링크: {notice.url or '-'}",
+                    "",
+                ]
+            )
     else:
         lines.append("이번 실행에서 새로 확인된 공고는 없습니다.")
-        lines.append("")
 
-    lines.append("📌 [기존 공고]")
-    if old_notices:
-        for idx, notice in enumerate(old_notices, 1):
-            lines.extend(format_notice(notice, idx))
-    else:
-        lines.append("아직 기존 공고가 없습니다.")
-        lines.append("")
+    return "\n".join(lines)
 
-    return title, "\n".join(lines), new_notices, old_notices
 
-def chunk_list(items: list[Notice], chunk_size: int) -> list[list[Notice]]:
-    return [
-        items[i : i + chunk_size]
-        for i in range(0, len(items), chunk_size)
-    ]
+def build_html_message(new_notices: list[Notice], old_notices: list[Notice], total_count: int) -> str:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    rows: list[str] = []
+    for idx, notice in enumerate(new_notices, 1):
+        title = html.escape(notice.title or "-")
+        category = html.escape(notice.category or "-")
+        organization = html.escape(notice.organization or "-")
+        status = html.escape(notice.status or "-")
+        period = html.escape(_period_text(notice))
+        url = html.escape(notice.url or "")
+
+        link_html = f'<a href="{url}" target="_blank">바로가기</a>' if url else "-"
+
+        rows.append(
+            f"""
+            <tr>
+                <td style="padding:10px;border:1px solid #ddd;text-align:center;">{idx}</td>
+                <td style="padding:10px;border:1px solid #ddd;font-weight:600;">{title}</td>
+                <td style="padding:10px;border:1px solid #ddd;text-align:center;">{category}</td>
+                <td style="padding:10px;border:1px solid #ddd;">{organization}</td>
+                <td style="padding:10px;border:1px solid #ddd;text-align:center;">{status}</td>
+                <td style="padding:10px;border:1px solid #ddd;text-align:center;white-space:nowrap;">{period}</td>
+                <td style="padding:10px;border:1px solid #ddd;text-align:center;">{link_html}</td>
+            </tr>
+            """
+        )
+
+    if not rows:
+        rows.append(
+            """
+            <tr>
+                <td colspan="7" style="padding:16px;border:1px solid #ddd;text-align:center;">
+                    이번 실행에서 새로 확인된 공고는 없습니다.
+                </td>
+            </tr>
+            """
+        )
+
+    return f"""
+    <!doctype html>
+    <html lang="ko">
+    <head>
+        <meta charset="utf-8">
+        <title>K-Startup 모집중 공고 알림</title>
+    </head>
+    <body style="margin:0;padding:24px;background-color:#f6f7f9;font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#222;">
+        <div style="max-width:1100px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+            <div style="padding:24px;background:#243b53;color:#fff;">
+                <h2 style="margin:0 0 8px 0;font-size:22px;">K-Startup 모집중 공고 알림</h2>
+                <p style="margin:0;font-size:14px;opacity:.9;">조회시각: {html.escape(now)}</p>
+            </div>
+
+            <div style="padding:20px 24px;border-bottom:1px solid #e5e7eb;">
+                <span style="display:inline-block;margin-right:8px;padding:8px 12px;background:#e8f5e9;border-radius:20px;font-weight:600;">신규 {len(new_notices)}건</span>
+                <span style="display:inline-block;margin-right:8px;padding:8px 12px;background:#eef2ff;border-radius:20px;font-weight:600;">기존 {len(old_notices)}건</span>
+                <span style="display:inline-block;padding:8px 12px;background:#f3f4f6;border-radius:20px;font-weight:600;">전체 {total_count}건</span>
+                <p style="margin:14px 0 0 0;color:#555;font-size:14px;">
+                    기존 공고는 이미 이전에 발송된 공고입니다. 이 메일에는 신규 공고만 상세 표시합니다.
+                </p>
+            </div>
+
+            <div style="padding:24px;">
+                <h3 style="margin:0 0 12px 0;font-size:18px;">신규 공고 목록</h3>
+                <table style="width:100%;border-collapse:collapse;font-size:14px;">
+                    <thead>
+                        <tr style="background:#f3f4f6;">
+                            <th style="padding:10px;border:1px solid #ddd;">번호</th>
+                            <th style="padding:10px;border:1px solid #ddd;">공고명</th>
+                            <th style="padding:10px;border:1px solid #ddd;">분류</th>
+                            <th style="padding:10px;border:1px solid #ddd;">기관</th>
+                            <th style="padding:10px;border:1px solid #ddd;">상태</th>
+                            <th style="padding:10px;border:1px solid #ddd;">접수기간</th>
+                            <th style="padding:10px;border:1px solid #ddd;">링크</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {''.join(rows)}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+def save_html_file(html_body: str) -> Path:
+    """생성된 HTML 이메일 본문을 파일로 저장하고 파일 경로를 반환합니다."""
+    HTML_OUTPUT_PATH.write_text(html_body, encoding="utf-8")
+    print(f"[정보] HTML 파일 저장 완료: {HTML_OUTPUT_PATH}")
+    return HTML_OUTPUT_PATH
 
 
 def run() -> None:
@@ -128,32 +181,25 @@ def run() -> None:
     latest_path = BASE_DIR / state_config.get("latest_file", "latest_notices.json")
 
     seen_ids = load_seen_ids(seen_path)
-
     notices = fetch_kstartup_notices(config)
 
-    title, message, new_notices, old_notices = build_message(notices, seen_ids)
+    new_notices = [n for n in notices if n.notice_id not in seen_ids]
+    old_notices = [n for n in notices if n.notice_id in seen_ids]
 
-    print(message)
+    subject = f"[K-Startup] 신규 공고 {len(new_notices)}건 / 전체 {len(notices)}건"
+    html_body = build_html_message(new_notices, old_notices, len(notices))
+   
+    html_file_path = save_html_file(html_body)
 
-    notification = config.get("notification", {})
-    method = notification.get("method", "slack")
-
-    if method != "slack":
-        raise ValueError(f"현재 예제는 slack 알림만 지원합니다. method={method}")
-
-    send_slack_message(
-        notification.get("slack", {}),
-        title,
-        message,
+    send_html_email(
+    subject=subject,
+    html_body=html_body,
+    attachment_path=html_file_path,
     )
-
-    # 이번에 조회된 모든 공고 ID를 저장합니다.
-    # 다음 실행부터는 같은 notice_id가 기존 공고로 분류됩니다.
+    
     all_ids = seen_ids | {n.notice_id for n in notices}
     save_seen_ids(seen_path, all_ids)
 
-    # latest_notices.json에는 신규 공고만 저장합니다.
-    # GitHub에 커밋할 필요는 없고, Actions artifact 확인용으로만 사용하면 됩니다.
     latest_path.write_text(
         json.dumps([n.to_dict() for n in new_notices], ensure_ascii=False, indent=2),
         encoding="utf-8",
