@@ -2,7 +2,7 @@ name: K-Startup Email Notice Monitor
 
 on:
   schedule:
-    - cron: "42 5 * * *"  # 매주 test test
+    - cron: "12 4 * * *"  # 매주 test test
   workflow_dispatch:
 
 permissions:
