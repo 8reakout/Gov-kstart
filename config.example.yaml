@@ -1,25 +1,33 @@
 kstartup:
   api_url: "https://apis.data.go.kr/B552735/kisedKstartupService01/getAnnouncementInformation01"
 
-  # 실제 인증키는 .env 또는 GitHub Secrets의 KSTARTUP_SERVICE_KEY 사용
   service_key: ""
 
   response_format: "json"
 
+  max_pages: 10
+
   params:
     page: 1
-    perPage: 100
+    perPage: 15
     returnType: "json"
     Rcrt_prgs_yn: "Y"
+
+  # 이 분류만 이메일 알림 대상으로 사용합니다.
+  allowed_categories:
+    - "사업화"
+    - "인력"
+    - "멘토링ㆍ컨설팅ㆍ교육"
 
   field_candidates:
     id:
       - "pbanc_sn"
+      - "pbancSn"
       - "id"
     title:
       - "biz_pbanc_nm"
       - "title"
-      - "titl_nm"
+      - "pbanc_nm"
     category:
       - "supt_biz_clsfc"
       - "category"
@@ -29,17 +37,20 @@ kstartup:
       - "organization"
     start_date:
       - "pbanc_rcpt_bgng_dt"
+      - "start_date"
     end_date:
       - "pbanc_rcpt_end_dt"
+      - "end_date"
     status:
       - "rcrt_prgs_yn"
       - "Rcrt_prgs_yn"
     url:
       - "detl_pg_url"
+      - "biz_gdnc_url"
+      - "url"
 
   include_keywords: []
 
-slack:
-  webhook_url: ""
-  username: "K-Startup 공고 알림봇"
-  icon_emoji: ":mega:"
+state:
+  seen_file: "seen_notice_ids.json"
+  latest_file: "latest_notices.json"
