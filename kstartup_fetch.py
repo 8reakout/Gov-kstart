@@ -253,29 +253,20 @@ def build_api_params(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def fetch_kstartup_notices(config: dict[str, Any]) -> list[Notice]:
-    """K-Startup 지원사업 공고 API를 호출하고 Notice 목록으로 정규화합니다."""
+    """K-Startup 지원사업 공고 API를 여러 페이지 호출하고 Notice 목록으로 정규화합니다."""
     kcfg = config["kstartup"]
     api_url = kcfg.get("api_url", "").strip()
 
     if not api_url:
         raise ValueError("config.yaml의 kstartup.api_url 값이 비어 있습니다.")
 
-    params = build_api_params(config)
-    response = request_with_retry(api_url, params)
+    max_pages = int(kcfg.get("max_pages", 10))
+    per_page = int(kcfg.get("perPage", 15))
 
-    text = response.text.strip()
-
-    try:
-        data = response.json()
-        items = _dig_items(data)
-    except Exception:
-        if text.startswith("<"):
-            items = _parse_xml_items(text)
-        else:
-            raise RuntimeError(
-                "K-Startup API 응답이 JSON/XML 형식이 아닙니다. "
-                "API URL/인증키/파라미터를 확인하세요. 응답 앞부분: " + text[:300]
-            )
+    # config.yaml의 params 안에 perPage가 있는 경우도 대비
+    params_cfg = kcfg.get("params", {})
+    if isinstance(params_cfg, dict):
+        per_page = int(params_cfg.get("perPage", per_page))
 
     field_candidates = kcfg.get("field_candidates", {})
     include_keywords = kcfg.get("include_keywords", [])
@@ -284,49 +275,101 @@ def fetch_kstartup_notices(config: dict[str, Any]) -> list[Notice]:
 
     notices: list[Notice] = []
 
-    for item in items:
-        notice_id = _first_value(item, field_candidates.get("id", []))
-        title = _first_value(item, field_candidates.get("title", []))
-        category = _first_value(item, field_candidates.get("category", []))
+    for page in range(1, max_pages + 1):
+        params = build_api_params(config)
 
-        if category not in allowed_categories:
-            continue
+        # 페이지 반복 조회 적용
+        params["page"] = page
+        params["perPage"] = per_page
 
-        organization = _first_value(item, field_candidates.get("organization", []))
-        start_date = _normalize_date(_first_value(item, field_candidates.get("start_date", [])))
-        end_date = _normalize_date(_first_value(item, field_candidates.get("end_date", [])))
-        status = _normalize_status(_first_value(item, field_candidates.get("status", [])))
-        url = _first_value(item, field_candidates.get("url", [])) or _make_detail_url(detail_template, notice_id)
-        url = _normalize_url(url)
-
-        if not _is_active_notice(status, end_date):
-            continue
-
-        combined_text = " ".join(str(v) for v in item.values() if v is not None)
-        if not _contains_any_keyword(combined_text, include_keywords):
-            continue
-
-        if not title:
-            continue
-
-        if not notice_id:
-            notice_id = f"{title}|{end_date}|{url}"
-
-        notices.append(
-            Notice(
-                notice_id=notice_id,
-                title=title,
-                category=category,
-                organization=organization,
-                start_date=start_date,
-                end_date=end_date,
-                status=status,
-                url=url,
-                raw=item,
-            )
+        print(
+            f"[정보] K-Startup API 호출 시작: "
+            f"page={params['page']}, perPage={params['perPage']}"
         )
 
-    return sorted(
-        notices,
+        response = request_with_retry(api_url, params)
+
+        text = response.text.strip()
+
+        try:
+            data = response.json()
+            items = _dig_items(data)
+        except Exception:
+            if text.startswith("<"):
+                items = _parse_xml_items(text)
+            else:
+                raise RuntimeError(
+                    "K-Startup API 응답이 JSON/XML 형식이 아닙니다. "
+                    "API URL/인증키/파라미터를 확인하세요. 응답 앞부분: " + text[:300]
+                )
+
+        print(f"[정보] K-Startup API page={page} 응답 item 수: {len(items)}")
+
+        if not items:
+            print(f"[정보] K-Startup API page={page}에 공고가 없어 조회를 중단합니다.")
+            break
+
+        page_notice_count = 0
+
+        for item in items:
+            notice_id = _first_value(item, field_candidates.get("id", []))
+            title = _first_value(item, field_candidates.get("title", []))
+            category = _first_value(item, field_candidates.get("category", []))
+
+            if category not in allowed_categories:
+                continue
+
+            organization = _first_value(item, field_candidates.get("organization", []))
+            start_date = _normalize_date(_first_value(item, field_candidates.get("start_date", [])))
+            end_date = _normalize_date(_first_value(item, field_candidates.get("end_date", [])))
+            status = _normalize_status(_first_value(item, field_candidates.get("status", [])))
+
+            url = (
+                _first_value(item, field_candidates.get("url", []))
+                or _make_detail_url(detail_template, notice_id)
+            )
+            url = _normalize_url(url)
+
+            if not _is_active_notice(status, end_date):
+                continue
+
+            combined_text = " ".join(str(v) for v in item.values() if v is not None)
+            if not _contains_any_keyword(combined_text, include_keywords):
+                continue
+
+            if not title:
+                continue
+
+            if not notice_id:
+                notice_id = f"{title}|{end_date}|{url}"
+
+            notices.append(
+                Notice(
+                    notice_id=notice_id,
+                    title=title,
+                    category=category,
+                    organization=organization,
+                    start_date=start_date,
+                    end_date=end_date,
+                    status=status,
+                    url=url,
+                    raw=item,
+                )
+            )
+
+            page_notice_count += 1
+
+        print(f"[정보] K-Startup API page={page} 변환 후 공고 수: {page_notice_count}")
+
+    deduped: dict[str, Notice] = {}
+
+    for notice in notices:
+        deduped[notice.notice_id] = notice
+
+    result = sorted(
+        deduped.values(),
         key=lambda n: (n.end_date or "9999-12-31", n.title),
     )
+
+    print(f"[정보] K-Startup 최종 수집 공고 수: {len(result)}")
+    return result
