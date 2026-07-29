@@ -92,18 +92,21 @@ def build_html_message(new_notices: list[Notice], old_notices: list[Notice], tot
         period = html.escape(_period_text(notice))
         url = html.escape(notice.url or "")
 
-        link_html = f'<a href="{url}" target="_blank">바로가기</a>' if url else "-"
+        title_html = (
+            f'<a href="{url}" target="_blank" style="color:#1d4ed8;text-decoration:underline;">{title}</a>'
+            if url
+            else title
+        )
 
         rows.append(
             f"""
             <tr>
                 <td style="padding:10px;border:1px solid #ddd;text-align:center;">{idx}</td>
-                <td style="padding:10px;border:1px solid #ddd;font-weight:600;">{title}</td>
+                <td style="padding:10px;border:1px solid #ddd;font-weight:600;">{title_html}</td>
                 <td style="padding:10px;border:1px solid #ddd;text-align:center;">{category}</td>
                 <td style="padding:10px;border:1px solid #ddd;">{organization}</td>
                 <td style="padding:10px;border:1px solid #ddd;text-align:center;">{status}</td>
                 <td style="padding:10px;border:1px solid #ddd;text-align:center;white-space:nowrap;">{period}</td>
-                <td style="padding:10px;border:1px solid #ddd;text-align:center;">{link_html}</td>
             </tr>
             """
         )
@@ -112,7 +115,7 @@ def build_html_message(new_notices: list[Notice], old_notices: list[Notice], tot
         rows.append(
             """
             <tr>
-                <td colspan="7" style="padding:16px;border:1px solid #ddd;text-align:center;">
+                <td colspan="6" style="padding:16px;border:1px solid #ddd;text-align:center;">
                     이번 실행에서 새로 확인된 공고는 없습니다.
                 </td>
             </tr>
@@ -153,7 +156,6 @@ def build_html_message(new_notices: list[Notice], old_notices: list[Notice], tot
                             <th style="padding:10px;border:1px solid #ddd;">기관</th>
                             <th style="padding:10px;border:1px solid #ddd;">상태</th>
                             <th style="padding:10px;border:1px solid #ddd;">접수기간</th>
-                            <th style="padding:10px;border:1px solid #ddd;">링크</th>
                         </tr>
                     </thead>
                     <tbody>
