@@ -35,7 +35,7 @@ jobs:
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
           MAIL_CC: ${{ secrets.MAIL_CC }}
-        run: python main.py
+        run: python main.py  || (echo "1차 실행 실패, 60초 후 재시도" && sleep 60 && python main.py)
 
       - name: Commit updated notice state
         run: |
