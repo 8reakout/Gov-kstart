@@ -215,7 +215,7 @@ def request_with_retry(api_url: str, params: dict[str, Any], max_retries: int = 
             response = requests.get(
                 api_url,
                 params=params,
-                timeout=60,
+                timeout=(20, 90),
                 headers={
                     "User-Agent": "Mozilla/5.0 GovMonitoringBot/1.0",
                     "Accept": "application/json, text/plain, */*",
@@ -236,7 +236,10 @@ def request_with_retry(api_url: str, params: dict[str, Any], max_retries: int = 
             last_error = exc
             print(f"[경고] K-Startup API 요청 실패: {attempt}/{max_retries}회 재시도 - {exc}")
 
-        time.sleep(5 * attempt)
+        if attempt < max_retries:
+            sleep_seconds = 10 * attempt
+            print(f"[정보] {sleep_seconds}초 후 재시도합니다.")
+            time.sleep(sleep_seconds)
 
     raise RuntimeError(f"K-Startup API 요청이 {max_retries}회 모두 실패했습니다: {last_error}")
 
